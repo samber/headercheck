@@ -25,7 +25,43 @@
 - **Flexible scoping**: include/exclude by regex; defaults to popular source extensions
 - **Shebang-aware**: keeps `#!/usr/bin/env ...` on top
 
-## 🚀 Install
+## 🍸 GitHub Action
+
+Use the reusable action published in this repository to run `headercheck` in CI:
+
+```yaml
+# .github/workflows/headercheck.yml
+name: Headercheck
+on:
+  push:
+  pull_request:
+
+jobs:
+  headercheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run headercheck
+        uses: samber/headercheck@v1
+        with:
+          # version: latest            # or v0.1.0, v0.2.3, ...
+          # working-directory: .
+          # config: .headercheck.yaml  # repeat with commas or newlines to pass multiple --config
+          # templates: .header.txt     # repeat with commas or newlines to pass multiple --template
+          # include: '(?i)\\.(go|ts|js)$'
+          # exclude: 'vendor/|^third_party/'
+          # paths: '.'                 # optional; defaults to repository root
+          # fix: 'false'               # set to 'true' to modify files in-place
+          # force: 'false'
+          # verbose: 'false'
+```
+
+Notes:
+
+- By default, `headercheck` expects a template at `.header.txt`, or you can configure templates via `.headercheck.yaml` or the action inputs.
+- The action fails the job when issues are found (unless `fix: 'true'` is set).
+
+## 🚀 Install binary
 
 ```bash
 go install github.com/samber/headercheck/cmd/headercheck@latest

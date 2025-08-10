@@ -1,0 +1,124 @@
+name: 'HeaderCheck'
+description: 'Validate and (optionally) fix required file headers across your source code.'
+author: 'samber'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  version:
+    description: 'CLI version to install (e.g., v0.1.0, v0.2.3, or latest)'
+    required: false
+    default: 'latest'
+  working-directory:
+    description: 'Directory to run headercheck from'
+    required: false
+    default: '.'
+  config:
+    description: 'Config file path(s). Comma- or newline-separated to repeat --config'
+    required: false
+  templates:
+    description: 'Additional template file path(s). Comma- or newline-separated to repeat --template'
+    required: false
+  include:
+    description: 'Regex of file paths to include (overrides config)'
+    required: false
+  exclude:
+    description: 'Regex of file paths to exclude (overrides config)'
+    required: false
+  paths:
+    description: 'Path(s) to scan. If empty, scans the repository root. Accepts space/comma/newline-separated list.'
+    required: false
+  fix:
+    description: 'Apply fixes in place'
+    required: false
+    default: 'false'
+  force:
+    description: 'Force processing of non-text/invalid files (prints warnings)'
+    required: false
+    default: 'false'
+  verbose:
+    description: 'Verbose output'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.x'
+
+    - name: Install headercheck
+      shell: bash
+      run: |
+        set -euo pipefail
+        ver='${{ inputs.version }}'
+        # If user did not pin a specific version, and the action is referenced with a full semver tag,
+        # prefer that to keep action and binary aligned. Otherwise, fall back to 'latest'.
+        if [[ "$ver" == 'latest' ]]; then
+          if [[ "${GITHUB_ACTION_REF:-}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            ver="$GITHUB_ACTION_REF"
+          fi
+        fi
+        echo "Installing headercheck@$ver"
+        go install github.com/samber/headercheck/cmd/headercheck@"$ver"
+        command -v headercheck >/dev/null 2>&1 || { echo 'headercheck not found on PATH after install'; exit 1; }
+
+    - name: Run headercheck
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+
+        ARGS=()
+
+        # Repeatable --config flags
+        if [[ -n "${{ inputs.config }}" ]]; then
+          # split on newlines or commas
+          IFS=$'\n,' read -r -a cfgs <<< "${{ inputs.config }}"
+          for c in "${cfgs[@]}"; do
+            c="${c//[$'\t\r\n']/}"
+            if [[ -n "$c" ]]; then ARGS+=("--config" "$c"); fi
+          done
+        fi
+
+        # Repeatable --template flags
+        if [[ -n "${{ inputs.templates }}" ]]; then
+          IFS=$'\n,' read -r -a tpls <<< "${{ inputs.templates }}"
+          for t in "${tpls[@]}"; do
+            t="${t//[$'\t\r\n']/}"
+            if [[ -n "$t" ]]; then ARGS+=("--template" "$t"); fi
+          done
+        fi
+
+        if [[ -n "${{ inputs.include }}" ]]; then ARGS+=("--include" "${{ inputs.include }}"); fi
+        if [[ -n "${{ inputs.exclude }}" ]]; then ARGS+=("--exclude" "${{ inputs.exclude }}"); fi
+
+        if [[ "${{ inputs.fix }}" == "true" ]]; then ARGS+=("--fix"); fi
+        if [[ "${{ inputs.force }}" == "true" ]]; then ARGS+=("--force"); fi
+        if [[ "${{ inputs.verbose }}" == "true" ]]; then ARGS+=("-v"); fi
+
+        # Paths (optional). If empty, run without positional args to scan repo root.
+        RUN_PATHS=()
+        if [[ -n "${{ inputs.paths }}" ]]; then
+          # allow space/comma/newline-separated
+          paths_raw="${{ inputs.paths }}"
+          # convert commas to newlines for simpler splitting
+          paths_raw="${paths_raw//,/\n}"
+          while IFS= read -r p; do
+            # split each line on spaces to allow space-separated lists
+            for tok in $p; do
+              [[ -n "$tok" ]] && RUN_PATHS+=("$tok")
+            done
+          done < <(printf "%s\n" "$paths_raw")
+        fi
+
+        echo "+ headercheck ${ARGS[*]} ${RUN_PATHS[*]:-"(repo root)"}"
+        if [[ ${#RUN_PATHS[@]} -gt 0 ]]; then
+          headercheck "${ARGS[@]}" "${RUN_PATHS[@]}"
+        else
+          headercheck "${ARGS[@]}"
+        fi
