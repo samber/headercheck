@@ -1,3 +1,4 @@
+// Package gitmeta provides Git metadata for headercheck.
 package gitmeta
 
 import (
@@ -9,11 +10,13 @@ import (
 	"strings"
 )
 
+// Git is a Git metadata provider.
 type Git struct {
 	root     string
 	disabled bool
 }
 
+// New creates a new Git instance.
 func New(ctx context.Context, root string) (*Git, error) {
 	// ensure git is available and repo exists
 	cmd := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--is-inside-work-tree")
@@ -27,8 +30,10 @@ func New(ctx context.Context, root string) (*Git, error) {
 	return &Git{root: root}, nil
 }
 
+// Disabled returns a Git instance that is disabled.
 func Disabled() *Git { return &Git{disabled: true} }
 
+// Author returns the author of the file.
 func (g *Git) Author(path string) (string, error) {
 	if g.disabled {
 		return "", nil
@@ -50,6 +55,7 @@ func (g *Git) Author(path string) (string, error) {
 	return s, nil
 }
 
+// CreationDate returns the creation date of the file.
 func (g *Git) CreationDate(path string) (string, error) {
 	if g.disabled {
 		return "", nil
@@ -69,6 +75,7 @@ func (g *Git) CreationDate(path string) (string, error) {
 	return s, nil
 }
 
+// LastUpdateDate returns the last update date of the file.
 func (g *Git) LastUpdateDate(path string) (string, error) {
 	if g.disabled {
 		return "", nil
@@ -81,6 +88,7 @@ func (g *Git) LastUpdateDate(path string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// Touched reports if file has changes compared to HEAD (or if newly added/unstaged).
 func (g *Git) Touched(ctx context.Context, path string) (bool, error) {
 	if g.disabled {
 		return true, nil

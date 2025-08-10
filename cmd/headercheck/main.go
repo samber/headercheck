@@ -1,3 +1,4 @@
+// Package main is the main package for headercheck.
 package main
 
 import (

@@ -1,3 +1,4 @@
+// Package plugin provides the golangci-lint plugin for headercheck.
 package main
 
 import (

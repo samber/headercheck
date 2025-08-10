@@ -4,22 +4,28 @@ import "bytes"
 
 // Export thin wrappers for analyzer usage without duplicating logic.
 
+// DetectHeaderBlock detects the header block in the given content.
 func DetectHeaderBlock(content []byte) (header []byte, start int, end int) {
 	return detectHeaderBlock(content)
 }
 
+// HeaderSemanticallyMatches reports if the existing header semantically matches the expected header.
 func HeaderSemanticallyMatches(existing, expected []byte) bool {
 	return headerSemanticallyMatches(existing, expected)
 }
 
+// InsertHeader inserts the given header into the given content.
 func InsertHeader(content []byte, header []byte) []byte { return insertHeader(content, header) }
 
+// ReplaceHeader replaces the header in the given content.
 func ReplaceHeader(content []byte, start, end int, header []byte) []byte {
 	return replaceHeader(content, start, end, header)
 }
 
+// NormalizeNewlines normalizes the newlines in the given content.
 func NormalizeNewlines(b []byte) []byte { return normalizeNewlines(b) }
 
+// RenderTemplatesFor renders the templates for the given path.
 // RenderTemplatesFor path uses Engine's templates and Git metadata; if Engine is nil or has no templates,
 // returns nil.
 func (e *Engine) RenderTemplatesFor(path string) [][]byte {
@@ -31,7 +37,7 @@ func (e *Engine) RenderTemplatesFor(path string) [][]byte {
 	return out
 }
 
-// ConcatLines is a helper to convert bytes to a single line for messages.
+// ConcatLines converts bytes to a single line for messages.
 func ConcatLines(b []byte) string { return string(bytes.ReplaceAll(b, []byte("\n"), []byte(" "))) }
 
 // AcceptsPath reports whether any template rule applies to the given path

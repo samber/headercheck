@@ -16,10 +16,10 @@ type fakeGit struct {
 	touched bool
 }
 
-func (g *fakeGit) Author(path string) (string, error)         { return g.author, nil }
-func (g *fakeGit) CreationDate(path string) (string, error)   { return g.created, nil }
-func (g *fakeGit) LastUpdateDate(path string) (string, error) { return g.updated, nil }
-func (g *fakeGit) Touched(ctx context.Context, path string) (bool, error) {
+func (g *fakeGit) Author(_ string) (string, error)         { return g.author, nil }
+func (g *fakeGit) CreationDate(_ string) (string, error)   { return g.created, nil }
+func (g *fakeGit) LastUpdateDate(_ string) (string, error) { return g.updated, nil }
+func (g *fakeGit) Touched(_ context.Context, _ string) (bool, error) {
 	return g.touched, nil
 }
 

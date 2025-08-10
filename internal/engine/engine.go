@@ -1,3 +1,4 @@
+// Package engine provides the main engine for headercheck.
 package engine
 
 import (
@@ -14,6 +15,7 @@ import (
 	"unicode/utf8"
 )
 
+// GitMetadata describes the Git metadata for a file.
 type GitMetadata interface {
 	Author(path string) (string, error)
 	CreationDate(path string) (string, error)
@@ -25,6 +27,7 @@ type GitMetadata interface {
 // DefaultIncludeRegex aims to match common source code file extensions across languages.
 const DefaultIncludeRegex = `(?i)\.(go|c|h|hpp|hh|cc|cpp|cxx|cs|java|kt|ts|tsx|js|jsx|mjs|cjs|rb|py|rs|php|swift|m|mm|scala|sh|bash|zsh|fish|pl|pm|r|jl|sql|proto|make|mk|cmake|dockerfile|gradle|sbt|groovy|hs|erl|ex|exs|clj|cljs|edn|fs|fsi|fsx|ps1|psm1|vb|vbs|lua|coffee|dart|nim|zig)$`
 
+// TemplateRule describes a template rule.
 type TemplateRule struct {
 	TemplatePath string
 	Include      *regexp.Regexp
@@ -32,6 +35,7 @@ type TemplateRule struct {
 	Content      []byte
 }
 
+// Options describes the options for the engine.
 type Options struct {
 	Root       string
 	Rules      []TemplateRule
@@ -41,10 +45,12 @@ type Options struct {
 	RespectGit bool
 }
 
+// Engine is the main engine for headercheck.
 type Engine struct {
 	opts Options
 }
 
+// New creates a new engine.
 func New(opts Options) (*Engine, error) {
 	e := &Engine{opts: Options{Root: opts.Root, Force: opts.Force, Verbose: opts.Verbose, Git: opts.Git, RespectGit: opts.RespectGit}}
 	for _, tr := range opts.Rules {
@@ -73,15 +79,21 @@ type FileResult struct {
 	Warning string
 }
 
+// Action describes the action taken or required for a file.
 type Action string
 
 const (
-	ActionNone    Action = "none"
-	ActionInsert  Action = "insert"
+	// ActionNone indicates that no action is required for the file.
+	ActionNone Action = "none"
+	// ActionInsert indicates that the header should be inserted for the file.
+	ActionInsert Action = "insert"
+	// ActionReplace indicates that the header should be replaced for the file.
 	ActionReplace Action = "replace"
-	ActionRemove  Action = "remove"
+	// ActionRemove indicates that the header should be removed for the file.
+	ActionRemove Action = "remove"
 )
 
+// Process checks and fixes the headers for the given paths.
 func (e *Engine) Process(ctx context.Context, paths []string, fix bool) ([]FileResult, error) {
 	var results []FileResult
 	for _, p := range paths {
@@ -125,6 +137,7 @@ func (e *Engine) Process(ctx context.Context, paths []string, fix bool) ([]FileR
 	return results, nil
 }
 
+// processFile checks and fixes the header for the given path.
 func (e *Engine) processFile(ctx context.Context, path string, fix bool) FileResult {
 	if e.isTemplatePath(path) {
 		return FileResult{Path: path, Action: ActionNone}
@@ -255,7 +268,7 @@ func detectHeaderBlock(content []byte) (header []byte, start int, end int) {
 			break
 		}
 		// End conditions
-		if !(isLineComment(line) || strings.TrimSpace(line) == "") {
+		if !isLineComment(line) && strings.TrimSpace(line) != "" {
 			// reached first code line
 			break
 		}
@@ -434,7 +447,7 @@ func (e *Engine) handleMatchedHeader(
 }
 
 func (e *Engine) handleNoMatch(
-	ctx context.Context,
+	_ context.Context,
 	path string,
 	fix bool,
 	currentHeader []byte,

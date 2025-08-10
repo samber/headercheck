@@ -1,5 +1,11 @@
 version: "2"
 
+run:
+  concurrency: 4
+  # also lint _test.go files
+  tests: true
+  timeout: 5m
+
 linters:
   enable:
     - govet

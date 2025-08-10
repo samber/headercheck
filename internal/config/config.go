@@ -1,3 +1,4 @@
+// Package config provides configuration for headercheck.
 package config
 
 import (

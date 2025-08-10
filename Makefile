@@ -66,6 +66,11 @@ lint:
 	@command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint not found. Install via: brew install golangci-lint || go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; exit 1; }
 	golangci-lint run -v
 
+## Lint-fix with golangci-lint if available
+lint-fix:
+	@command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint not found. Install via: brew install golangci-lint || go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; exit 1; }
+	golangci-lint run -v --fix
+
 ## Build custom golangci binary from .custom-gcl.yml and run it
 lint-custom: tools
 	@command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint not found"; exit 1; }
