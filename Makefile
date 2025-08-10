@@ -82,7 +82,7 @@ test:
 	$(GO) test -race -covermode=atomic -coverprofile=coverage.out ./...
 
 ## Open coverage report (requires go tool cover)
-cover: test
+coverage: test
 	@$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 
