@@ -1,0 +1,41 @@
+# Go / general build artifacts
+bin/
+dist/
+build/
+out/
+tmp/
+
+# Compiled objects
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Coverage / profiling
+coverage.out
+coverage.html
+*.coverprofile
+*.cov
+*.prof
+profile.out
+
+# golangci-lint custom binary
+custom-gcl
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+
+# Modules/vendor (uncomment if you do not commit vendored deps)
+# vendor/
+
+# Go workspace file (comment out if you want to commit it)
+# go.work
+# go.work.sum

@@ -1,0 +1,6 @@
+
+templates:
+  - path: .header.txt
+    include: (?i)\.(go|js|ts|tsx|jsx|rs|py|rb|php|java|kt|c|h|cpp|hpp|m|mm|swift|scala|sh|bash|zsh|ps1|sql|proto)$
+    exclude: vendor/|^third_party/
+

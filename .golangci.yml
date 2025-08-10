@@ -1,0 +1,9 @@
+version: "2"
+
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - goheader
+    - revive
+    - errcheck

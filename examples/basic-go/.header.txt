@@ -1,0 +1,5 @@
+// Copyright 2025 Example.
+//
+// Author: %author%
+// Created: %creation_date%
+// Last Update: %last_update_date%

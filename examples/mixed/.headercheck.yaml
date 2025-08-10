@@ -1,0 +1,8 @@
+templates:
+  - path: .code.header.txt
+    include: (?i)\.(go|ts|tsx|js|jsx|rs|py)$
+    exclude: vendor/|^third_party/
+  - path: .scripts.header.txt
+    include: (?i)\.(sh|bash|zsh|ps1)$
+  - path: .yaml.header.txt
+    include: (?i)\.(ya?ml)$
