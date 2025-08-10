@@ -35,7 +35,7 @@ func (g *Git) Author(path string) (string, error) {
 	}
 	rel, _ := filepath.Rel(g.root, path)
 	// author of first commit touching the file
-	out, err := exec.Command("git", "-C", g.root, "log", "--format=%an", "--reverse", "--", rel).Output()
+	out, err := exec.Command("git", "-C", g.root, "log", "--format=%an <%ae>", "--reverse", "--", rel).Output()
 	if err != nil {
 		return "", err
 	}

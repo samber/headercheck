@@ -10,7 +10,7 @@
 - **Multiple header templates**: matched at most once per file
 - **Binary-safe**: ignore binary files by default; `--force` warns but continues
 - **Git-aware variables and change detection**:
-  - `%author%`: first committer name of the file
+  - `%author%`: first committer name and email of the file (e.g., `Jane Doe <jane@doe.com>`) 
   - `%creation_date%`: date of first commit touching the file (YYYY-MM-DD)
   - `%last_update_date%`: date of last commit touching the file (YYYY-MM-DD)
   - Don’t update headers in fix mode if file hasn’t changed since HEAD
@@ -25,15 +25,16 @@ go install github.com/samber/headercheck/cmd/headercheck@latest
 
 ## Quick start
 
-1) Create a template at project root: `.header.txt`
+1) Create a header template at project root: `.header.txt`
 
 ```text
-/*
-Author: %author%
-Created: %creation_date%
-Last Update: %last_update_date%
-Project: My Awesome App
-*/
+// Copyright 2025 Example.
+//
+// Author: %author%
+// Created: %creation_date%
+// Last Update: %last_update_date%
+// Project: My Awesome App
+
 ```
 
 2) Run the linter:
@@ -45,6 +46,24 @@ headercheck --fix ./...
 ```
 
 By default, common source files are included. Use `--include`/`--exclude` to refine.
+
+3) Review
+
+```diff
+--- a/examples/mixed/app/main.go
++++ b/examples/mixed/app/main.go
+@@ -1,3 +1,9 @@
++// Copyright 2025 Example.
++//
++// Author: Jane Doe <jane@doe.com>
++// Created: 2025-08-10
++// Last Update: 2025-08-10
++// Project: My Awesome App
++
+package main
+ 
+func main() {
+```
 
 ## Examples
 
