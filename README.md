@@ -42,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run headercheck
-        uses: samber/headercheck@v1
+        uses: samber/headercheck@v0.1.1
         with:
           # version: latest            # or v0.1.0, v0.2.3, ...
           # working-directory: .
