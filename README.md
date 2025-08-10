@@ -1,9 +1,17 @@
 
 # headercheck linter
 
-`headercheck` is a multi-language header linter and fixer. It checks that source files contain a required header and can insert or update it automatically. It is configurable, Git-aware, and compatible with golangci-lint via plugin or by running the CLI directly in CI.
+[![tag](https://img.shields.io/github/tag/samber/headercheck.svg)](https://github.com/samber/headercheck/releases)
+![Go Version](https://img.shields.io/badge/Go-%3E%3D%201.19-%23007d9c)
+[![GoDoc](https://godoc.org/github.com/samber/headercheck?status.svg)](https://pkg.go.dev/github.com/samber/headercheck)
+![Build Status](https://github.com/samber/headercheck/actions/workflows/test.yml/badge.svg)
+[![Go report](https://goreportcard.com/badge/github.com/samber/headercheck)](https://goreportcard.com/report/github.com/samber/headercheck)
+[![Coverage](https://img.shields.io/codecov/c/github/samber/headercheck)](https://codecov.io/gh/samber/headercheck)
+[![License](https://img.shields.io/github/license/samber/headercheck)](./LICENSE)
 
-## Features
+**`headercheck` checks and fixes required file headers across languages — configurable, Git-aware, CI-friendly, and golangci-lint compatible.**
+
+## 🦄 Features
 
 - **Validate headers**: presence and formatting of file headers
 - **Autofix**: insert or update headers in-place (`--fix`)
@@ -17,13 +25,13 @@
 - **Flexible scoping**: include/exclude by regex; defaults to popular source extensions
 - **Shebang-aware**: keeps `#!/usr/bin/env ...` on top
 
-## Install
+## 🚀 Install
 
 ```bash
 go install github.com/samber/headercheck/cmd/headercheck@latest
 ```
 
-## Quick start
+## 💡 Quick start
 
 1) Create a header template at project root: `.header.txt`
 
@@ -65,7 +73,7 @@ package main
 func main() {
 ```
 
-## Examples
+## 👀 Examples
 
 The `examples/` directory contains sample projects showing different configurations:
 
@@ -76,7 +84,7 @@ The `examples/` directory contains sample projects showing different configurati
 
 You can copy one of these into your project as a starting point and adapt the templates.
 
-## Configuration (.headercheck.yaml)
+## 🛠️ Configuration (.headercheck.yaml)
 
 At the repository root (or provide `--config path`):
 
@@ -100,7 +108,7 @@ CLI flags override config values:
 - `--force`: process invalid/binary files with a warning
 - `-v`: verbose
 
-## golangci-lint integration
+## 🔌 golangci-lint integration
 
 Two supported paths:
 
@@ -144,9 +152,26 @@ Note: Depending on the GolangCI plugin strategy, you may run the `headercheck` C
 
 Alternatively build a `.so` plugin (requires CGO and exact dependency versions). See `plugin/headercheck` and GolangCI docs. The CLI remains the primary supported interface.
 
-## Behavior
+## 🤝 Contributing
 
-- **Check mode**: Reports files missing or with a non-matching header. Variable differences (author/dates) are ignored to reduce churn.
-- **Fix mode**: Inserts header if missing, or replaces the existing header with a fully rendered one (author/dates updated). Skips files that were not modified in Git (HEAD clean).
-- **Binary files**: Skipped; with `--force` we print a non-blocking warning.
-- **Multiple templates**: We try to match any; at most one header is inserted per file.
+- Ping me on Twitter [@samuelberthe](https://twitter.com/samuelberthe) (DMs, mentions, whatever :))
+- Fork the [project](https://github.com/samber/headercheck)
+- Fix [open issues](https://github.com/samber/headercheck/issues) or request new features
+
+Don't hesitate ;)
+
+## 👤 Contributors
+
+![Contributors](https://contrib.rocks/image?repo=samber/headercheck)
+
+## 💫 Show your support
+
+Give a ⭐️ if this project helped you!
+
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/samber?style=for-the-badge)](https://github.com/sponsors/samber)
+
+## 📝 License
+
+Copyright © 2025 [Samuel Berthe](https://github.com/samber).
+
+This project is [Apache 2.0](./LICENSE) licensed.
