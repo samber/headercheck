@@ -42,5 +42,3 @@ jobs:
           bin/headercheck.so
         name: ${{ inputs.semver }}
         tag_name: ${{ inputs.semver }}
-        body: |
-          - Add changelog here
