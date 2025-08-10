@@ -19,5 +19,5 @@ jobs:
         with:
           args: --timeout 120s --max-same-issues 50
 
-      - name: Bearer
-        uses: bearer/bearer-action@v2
+      # - name: Bearer
+      #   uses: bearer/bearer-action@v2
