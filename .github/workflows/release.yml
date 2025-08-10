@@ -40,7 +40,7 @@ jobs:
         files: |
           bin/headercheck
           bin/headercheck.so
-        title: ${{ inputs.semver }}
-        tag: ${{ inputs.semver }}
+        name: ${{ inputs.semver }}
+        tag_name: ${{ inputs.semver }}
         body: |
           - Add changelog here
