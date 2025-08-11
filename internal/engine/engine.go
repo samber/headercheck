@@ -166,17 +166,17 @@ func (e *Engine) processFile(ctx context.Context, path string, fix bool) FileRes
 		// No applicable template for this file; skip
 		return FileResult{Path: path, Action: ActionNone}
 	}
-	currentHeader, headerStart, headerEnd := detectHeaderBlock(content)
+	currentHeader, _, _ := detectHeaderBlock(content)
 
 	// Try to find a matching template for the current header
 	matchedIdx := e.findMatchingTemplateIndex(rel, trules, currentHeader)
 
 	if matchedIdx >= 0 {
-		return e.handleMatchedHeader(ctx, path, fix, currentHeader, trules[matchedIdx], content, headerStart, headerEnd)
+		return e.handleMatchedHeader(ctx, path, fix, currentHeader, trules[matchedIdx], content)
 	}
 
 	// No match with any template
-	return e.handleNoMatch(ctx, path, fix, currentHeader, content, headerStart, headerEnd, trules)
+	return e.handleNoMatch(ctx, path, fix, currentHeader, content, trules)
 }
 
 // normalizeNewlines converts CRLF to LF
@@ -242,34 +242,35 @@ func headerSemanticallyMatches(existing, expected []byte) bool {
 	return bytes.Equal(a, b)
 }
 
+// headersStructurallyEqual considers headers equal if they only differ by trailing
+// newlines/blank lines. This avoids churn when the template omits the blank line
+// that is present in detected header blocks.
+func headersStructurallyEqual(a, b []byte) bool {
+	aa := bytes.TrimRight(a, "\r\n")
+	bb := bytes.TrimRight(b, "\r\n")
+	return bytes.Equal(aa, bb)
+}
+
 // detectHeaderBlock extracts the leading header comment block including shebang handling.
 func detectHeaderBlock(content []byte) (header []byte, start int, end int) {
-	r := bufio.NewReader(bytes.NewReader(content))
-	var buf bytes.Buffer
-	var off int
-	// Preserve shebang if present
-	firstLine, _ := r.ReadString('\n')
-	if strings.HasPrefix(firstLine, "#!") {
-		off += len(firstLine)
-		// read next block of comments after shebang
-		// include shebang in header detection only for reinsertion location, not comparison
-		// so we continue collecting comments
-	} else {
-		// reset reader to start if not shebang
-		r.Reset(bytes.NewReader(content))
-		off = 0
-	}
+	// Start after shebang and skip directives to detect existing header block
+	pos := findShebangEnd(content)
+	pos = skipBlankAndDirectives(content, pos)
 
-	// Collect leading comments (#, //, ; comment for some files) and block comments
-	// Stop at first non-comment non-empty line
+	// Collect contiguous header comment block
+	r := bufio.NewReader(bytes.NewReader(content[pos:]))
+	var buf bytes.Buffer
 	for {
 		line, err := r.ReadString('\n')
 		if err != nil && !errors.Is(err, io.EOF) {
 			break
 		}
-		// End conditions
-		if !isLineComment(line) && strings.TrimSpace(line) != "" {
-			// reached first code line
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" && !isLineComment(line) {
+			break
+		}
+		// Exclude directive lines from header
+		if isGoPreambleDirective(line) {
 			break
 		}
 		buf.WriteString(line)
@@ -277,12 +278,11 @@ func detectHeaderBlock(content []byte) (header []byte, start int, end int) {
 			break
 		}
 	}
-
-	headerBytes := buf.Bytes()
-	if len(headerBytes) == 0 {
+	if buf.Len() == 0 {
 		return nil, 0, 0
 	}
-	return headerBytes, off, off + len(headerBytes)
+	headerBytes := buf.Bytes()
+	return headerBytes, pos, pos + len(headerBytes)
 }
 
 func isLineComment(line string) bool {
@@ -300,6 +300,79 @@ func isLineComment(line string) bool {
 	return false
 }
 
+// isGoPreambleDirective reports whether the line is a Go-specific
+// top-of-file directive that must stay above any header, such as:
+//   - //go:build ...   (or legacy // +build ...)
+//   - //go:generate ... (and other //go:* pragmas)
+//   - //nolint[:...] ... (file-wide linter directives)
+//   - //lint:...        (additional linter directives)
+func isGoPreambleDirective(line string) bool {
+	s := strings.TrimSpace(line)
+	if !strings.HasPrefix(s, "//") {
+		// Recognize non-Go directive styles for common tools (eg shellcheck)
+		if strings.HasPrefix(s, "#") {
+			s2 := strings.TrimSpace(strings.TrimPrefix(s, "#"))
+			if strings.HasPrefix(strings.ToLower(s2), "shellcheck") {
+				return true
+			}
+		}
+		return false
+	}
+	// strip leading slashes and spaces
+	s = strings.TrimSpace(strings.TrimPrefix(s, "//"))
+	if s == "" {
+		return false
+	}
+	if strings.HasPrefix(s, "go:") { // covers go:build, go:generate, go:linkname, ...
+		return true
+	}
+	if strings.HasPrefix(s, "+build") { // legacy build tags
+		return true
+	}
+	if strings.HasPrefix(s, "nolint") { // file-wide linter ignores
+		return true
+	}
+	if strings.HasPrefix(s, "lint:") {
+		return true
+	}
+	return false
+}
+
+// detectPreambleEnd returns the byte offset right after any shebang and
+// Go preamble directives that must be kept at the very top of the file.
+// It also includes a trailing blank line after the last directive when present
+// (required by Go build constraints), so headers are inserted below that line.
+// findShebangEnd returns the end offset of a shebang line if present, else 0.
+func findShebangEnd(content []byte) int {
+	if bytes.HasPrefix(content, []byte("#!")) {
+		if nl := bytes.IndexByte(content, '\n'); nl >= 0 {
+			return nl + 1
+		}
+		return len(content)
+	}
+	return 0
+}
+
+// skipBlankAndDirectives advances from pos past blank lines and directive lines.
+func skipBlankAndDirectives(content []byte, pos int) int {
+	for pos < len(content) {
+		// find end of current line
+		nl := bytes.IndexByte(content[pos:], '\n')
+		end := len(content)
+		if nl >= 0 {
+			end = pos + nl + 1
+		}
+		line := string(content[pos:end])
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || isGoPreambleDirective(line) {
+			pos = end
+			continue
+		}
+		break
+	}
+	return pos
+}
+
 func replaceHeader(content []byte, start, end int, header []byte) []byte {
 	var out bytes.Buffer
 	out.Write(content[:start])
@@ -312,22 +385,173 @@ func replaceHeader(content []byte, start, end int, header []byte) []byte {
 }
 
 func insertHeader(content []byte, header []byte) []byte {
-	// Preserve shebang
-	if bytes.HasPrefix(content, []byte("#!")) {
-		nl := bytes.IndexByte(content, '\n')
-		if nl >= 0 {
-			var out bytes.Buffer
-			out.Write(content[:nl+1])
-			out.Write(header)
-			out.WriteString("\n")
-			out.Write(bytes.TrimLeft(content[nl+1:], "\n\r"))
-			return out.Bytes()
-		}
-	}
+	// Insert header after shebang (if any), before any directives
+	pos := findShebangEnd(content)
+
 	var out bytes.Buffer
+	out.Write(content[:pos])
 	out.Write(header)
 	out.WriteString("\n")
-	out.Write(bytes.TrimLeft(content, "\n\r"))
+	out.Write(bytes.TrimLeft(content[pos:], "\n\r"))
+	return out.Bytes()
+}
+
+// upsertHeaderBeforeDirectives ensures the given header exists below the shebang
+// and before any Go preamble directives. If a header already exists, it will be
+// replaced and any directive lines will be kept (and relocated below the header
+// if they were above it).
+func upsertHeaderBeforeDirectives(content []byte, header []byte, preserveExisting bool) []byte {
+	// Extract existing header block
+	existing, start, end := detectHeaderBlock(content)
+	shebangEnd := findShebangEnd(content)
+
+	// Split content into three parts: shebang, middle, tail
+	head := content[:shebangEnd]
+	middle := content[shebangEnd:]
+
+	// From middle, capture any leading directives and blanks
+	// so we can place header before them
+	dirStart := 0
+	for dirStart < len(middle) {
+		nl := bytes.IndexByte(middle[dirStart:], '\n')
+		lineEnd := len(middle)
+		if nl >= 0 {
+			lineEnd = dirStart + nl + 1
+		}
+		line := string(middle[dirStart:lineEnd])
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || isGoPreambleDirective(line) {
+			dirStart = lineEnd
+			if nl < 0 {
+				break
+			}
+			continue
+		}
+		break
+	}
+	directivesAndBlanks := middle[:dirStart]
+
+	// Next, capture top-of-file non-directive comment block (and its trailing blanks)
+	// that immediately follows the directives OR begins the file when no directives exist.
+	// This block should be moved below the directives, keeping it below the header.
+	commEnd := dirStart
+	for commEnd < len(middle) {
+		nl := bytes.IndexByte(middle[commEnd:], '\n')
+		lineEnd := len(middle)
+		if nl >= 0 {
+			lineEnd = commEnd + nl + 1
+		}
+		line := string(middle[commEnd:lineEnd])
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			commEnd = lineEnd
+			if nl < 0 {
+				break
+			}
+			continue
+		}
+		// treat any comment line as top-of-file comments, but stop before package decl or code
+		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "/*") || strings.HasPrefix(trimmed, "*") {
+			commEnd = lineEnd
+			if nl < 0 {
+				break
+			}
+			continue
+		}
+		break
+	}
+	topComments := middle[dirStart:commEnd]
+	rest := middle[commEnd:]
+
+	// If an existing header was detected and it lies within head+directives region,
+	// remove it prior to re-inserting. Optionally preserve the removed block to
+	// relocate it below the header.
+	var preservedHeader []byte
+	if len(existing) > 0 && start >= shebangEnd {
+		// delete existing header range
+		if preserveExisting {
+			preservedHeader = make([]byte, len(existing))
+			copy(preservedHeader, existing)
+		}
+		var buf bytes.Buffer
+		buf.Write(content[:start])
+		buf.Write(content[end:])
+		content = buf.Bytes()
+		// recompute pieces
+		shebangEnd = findShebangEnd(content)
+		head = content[:shebangEnd]
+		middle = content[shebangEnd:]
+		// recompute directives
+		dirStart = 0
+		for dirStart < len(middle) {
+			nl := bytes.IndexByte(middle[dirStart:], '\n')
+			lineEnd := len(middle)
+			if nl >= 0 {
+				lineEnd = dirStart + nl + 1
+			}
+			line := string(middle[dirStart:lineEnd])
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" || isGoPreambleDirective(line) {
+				dirStart = lineEnd
+				if nl < 0 {
+					break
+				}
+				continue
+			}
+			break
+		}
+		directivesAndBlanks = middle[:dirStart]
+		// recompute top-of-file comments block
+		commEnd = dirStart
+		for commEnd < len(middle) {
+			nl := bytes.IndexByte(middle[commEnd:], '\n')
+			lineEnd := len(middle)
+			if nl >= 0 {
+				lineEnd = commEnd + nl + 1
+			}
+			line := string(middle[commEnd:lineEnd])
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" || isLineComment(line) {
+				commEnd = lineEnd
+				if nl < 0 {
+					break
+				}
+				continue
+			}
+			break
+		}
+		topComments = middle[dirStart:commEnd]
+		rest = middle[commEnd:]
+	}
+
+	var out bytes.Buffer
+	out.Write(head)
+	// Ensure exactly one blank line between shebang and header (if shebang present)
+	if shebangEnd > 0 {
+		out.WriteString("\n")
+	}
+	out.Write(header)
+	// Ensure exactly one blank line after header
+	if !bytes.HasSuffix(header, []byte("\n")) {
+		out.WriteString("\n")
+	}
+	out.WriteString("\n")
+	// Directives block normalized to have exactly one blank line after
+	if trimmedDir := bytes.Trim(directivesAndBlanks, "\n\r"); len(trimmedDir) > 0 {
+		out.Write(trimmedDir)
+		out.WriteString("\n\n")
+	}
+	// Any other top-of-file comments moved after directives
+	if trimmedTop := bytes.Trim(topComments, "\n\r"); len(trimmedTop) > 0 {
+		out.Write(trimmedTop)
+		out.WriteString("\n\n")
+	}
+	// If we preserved an existing header (non-template comments), append it as well
+	if len(bytes.TrimSpace(preservedHeader)) > 0 {
+		out.Write(bytes.Trim(preservedHeader, "\n\r"))
+		out.WriteString("\n\n")
+	}
+	out.Write(rest)
 	return out.Bytes()
 }
 
@@ -425,7 +649,6 @@ func (e *Engine) handleMatchedHeader(
 	currentHeader []byte,
 	rendered TemplateRule,
 	content []byte,
-	headerStart, headerEnd int,
 ) FileResult {
 	if !fix {
 		return FileResult{Path: path, Action: ActionNone}
@@ -433,13 +656,16 @@ func (e *Engine) handleMatchedHeader(
 	if bytes.Equal(currentHeader, rendered.Content) {
 		return FileResult{Path: path, Action: ActionNone}
 	}
-	// Only suppress updates on clean trees when the difference is purely variable-like
-	// (i.e., headers are a semantic match ignoring variable values). In that case,
-	// we consider the existing header acceptable and avoid churn.
-	if e.shouldSkipDueToGit(ctx, path) && headerSemanticallyMatches(currentHeader, rendered.Content) {
+	if headersStructurallyEqual(currentHeader, rendered.Content) {
 		return FileResult{Path: path, Action: ActionNone}
 	}
-	nb := replaceHeader(content, headerStart, headerEnd, rendered.Content)
+	// If the only differences are variable-like and the file hasn't been touched,
+	// skip updates to avoid churn. Otherwise, still update to refresh variables.
+	if headerSemanticallyMatches(currentHeader, rendered.Content) && e.shouldSkipDueToGit(ctx, path) {
+		return FileResult{Path: path, Action: ActionNone}
+	}
+	// Reorder so that header is after shebang and before any directives
+	nb := upsertHeaderBeforeDirectives(content, rendered.Content, true)
 	if err := os.WriteFile(path, nb, 0o666); err != nil {
 		return FileResult{Path: path, Err: err}
 	}
@@ -452,25 +678,21 @@ func (e *Engine) handleNoMatch(
 	fix bool,
 	currentHeader []byte,
 	content []byte,
-	headerStart, headerEnd int,
 	trules []TemplateRule,
 ) FileResult {
 	if len(trules) == 0 {
 		return FileResult{Path: path, Action: ActionNone}
 	}
 	if fix {
+		nb := upsertHeaderBeforeDirectives(content, trules[0].Content, true)
+		action := ActionInsert
 		if len(currentHeader) > 0 {
-			nb := replaceHeader(content, headerStart, headerEnd, trules[0].Content)
-			if err := os.WriteFile(path, nb, 0o666); err != nil {
-				return FileResult{Path: path, Err: err}
-			}
-			return FileResult{Path: path, Action: ActionReplace}
+			action = ActionReplace
 		}
-		nb := insertHeader(content, trules[0].Content)
 		if err := os.WriteFile(path, nb, 0o666); err != nil {
 			return FileResult{Path: path, Err: err}
 		}
-		return FileResult{Path: path, Action: ActionInsert}
+		return FileResult{Path: path, Action: action}
 	}
 	if len(currentHeader) > 0 {
 		return FileResult{Path: path, Action: ActionReplace}

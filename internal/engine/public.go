@@ -17,6 +17,8 @@ func HeaderSemanticallyMatches(existing, expected []byte) bool {
 // InsertHeader inserts the given header into the given content.
 func InsertHeader(content []byte, header []byte) []byte { return insertHeader(content, header) }
 
+// Expose upsert for testing via engine methods
+
 // ReplaceHeader replaces the header in the given content.
 func ReplaceHeader(content []byte, start, end int, header []byte) []byte {
 	return replaceHeader(content, start, end, header)
