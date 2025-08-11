@@ -1,0 +1,14 @@
+templates:
+
+  # examples/basic-go
+  - path: examples/basic-go/.header.txt
+    include: ^examples/basic-go/.*\.(go)$
+
+  # examples/mixed
+  - path: examples/mixed/.code.header.txt
+    include: ^examples/mixed/.*\.(go|ts|tsx|js|jsx|rs|py)$
+    exclude: vendor/|^third_party/
+  - path: examples/mixed/.scripts.header.txt
+    include: ^examples/mixed/.*\.(sh|bash|zsh|ps1)$
+  - path: examples/mixed/.yaml.header.txt
+    include: ^examples/mixed/.*\.(ya?ml)$
