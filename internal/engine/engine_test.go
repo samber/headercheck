@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -66,6 +67,172 @@ func TestReplaceHeader_EnsuresOneBlankLine(t *testing.T) {
 	want := []byte("// new\n\npackage x\n")
 	if !bytes.Equal(out, want) {
 		t.Fatalf("replace result mismatch:\nGOT:\n%q\nWANT:\n%q", out, want)
+	}
+}
+
+func TestGoDirectives_AreMovedBelowHeader_OnInsert(t *testing.T) {
+	dir := t.TempDir()
+	tmpl := filepath.Join(dir, "tmpl.txt")
+	mustWrite(t, tmpl, []byte("// Header\n"))
+	src := filepath.Join(dir, "hello.go")
+	// File with go:build and nolint directives at top
+	mustWrite(t, src, []byte("//go:build go1.22\n//nolint:errcheck\n\npackage main\n"))
+
+	rules := []TemplateRule{{TemplatePath: tmpl, Include: regexp.MustCompile(DefaultIncludeRegex)}}
+	e, _ := New(Options{Root: dir, Rules: rules, Git: &fakeGit{touched: true}, RespectGit: true})
+	res, err := e.Process(context.Background(), []string{src}, true)
+	if err != nil {
+		t.Fatalf("process error: %v", err)
+	}
+	if res[0].Action != ActionInsert {
+		t.Fatalf("expected insert, got: %+v", res[0])
+	}
+	b := mustRead(t, src)
+	got := string(b)
+	// exactly one blank line after header and after directives
+	if !strings.HasPrefix(got, "// Header\n\n//go:build go1.22\n//nolint:errcheck\n\n") {
+		t.Fatalf("directives should be below header, got:\n%s", got)
+	}
+}
+
+func TestGoDirectives_AreMovedBelowHeader_OnReplace(t *testing.T) {
+	dir := t.TempDir()
+	tmpl := filepath.Join(dir, "tmpl.txt")
+	mustWrite(t, tmpl, []byte("// New header\n"))
+	src := filepath.Join(dir, "hello.go")
+	mustWrite(t, src, []byte("//go:build go1.20\n//nolint\n\n// Old header\n\npackage main\n"))
+
+	rules := []TemplateRule{{TemplatePath: tmpl, Include: regexp.MustCompile(DefaultIncludeRegex)}}
+	e, _ := New(Options{Root: dir, Rules: rules, Git: &fakeGit{touched: true}, RespectGit: true})
+	res, err := e.Process(context.Background(), []string{src}, true)
+	if err != nil {
+		t.Fatalf("process error: %v", err)
+	}
+	if res[0].Action != ActionReplace {
+		t.Fatalf("expected replace, got: %+v", res[0])
+	}
+	b := mustRead(t, src)
+	got := string(b)
+	if !strings.HasPrefix(got, "// New header\n\n//go:build go1.20\n//nolint\n\n") {
+		t.Fatalf("directives should be below header after replace, got:\n%s", got)
+	}
+}
+
+func TestShebang_RemainsVeryTop_WithHeaderAndDirectives(t *testing.T) {
+	dir := t.TempDir()
+	tmpl := filepath.Join(dir, "tmpl.txt")
+	mustWrite(t, tmpl, []byte("# header\n"))
+	src := filepath.Join(dir, "script.sh")
+	mustWrite(t, src, []byte("#!/usr/bin/env bash\n# shellcheck disable=SC2086\n\necho hi\n"))
+
+	rules := []TemplateRule{{TemplatePath: tmpl, Include: regexp.MustCompile(`(?i)\.(sh)$`)}}
+	e, _ := New(Options{Root: dir, Rules: rules, Git: &fakeGit{touched: true}, RespectGit: true})
+	res, err := e.Process(context.Background(), []string{src}, true)
+	if err != nil {
+		t.Fatalf("process error: %v", err)
+	}
+	// may be replace if test detected existing (non-empty) header-style lines
+	if res[0].Action != ActionInsert && res[0].Action != ActionReplace {
+		t.Fatalf("expected insert or replace, got: %+v", res[0])
+	}
+	got := string(mustRead(t, src))
+	if !strings.HasPrefix(got, "#!/usr/bin/env bash\n\n# header\n\n# shellcheck disable=SC2086\n\n") {
+		t.Fatalf("shebang/header/directive order incorrect:\n%s", got)
+	}
+}
+
+func TestTopOfFileComments_MovedBelowHeader(t *testing.T) {
+	dir := t.TempDir()
+	tmpl := filepath.Join(dir, "tmpl.txt")
+	mustWrite(t, tmpl, []byte("// H\n"))
+	src := filepath.Join(dir, "hello.go")
+	mustWrite(t, src, []byte("// random top comment\n// another\n\npackage main\n"))
+
+	rules := []TemplateRule{{TemplatePath: tmpl, Include: regexp.MustCompile(DefaultIncludeRegex)}}
+	e, _ := New(Options{Root: dir, Rules: rules, Git: &fakeGit{touched: true}, RespectGit: true})
+	_, err := e.Process(context.Background(), []string{src}, true)
+	if err != nil {
+		t.Fatalf("process error: %v", err)
+	}
+	got := string(mustRead(t, src))
+	if !strings.HasPrefix(got, "// H\n\n// random top comment\n// another\n\n") {
+		t.Fatalf("top-of-file comments should move below header:\n%s", got)
+	}
+}
+
+func TestReplaceHeader_KeepsSingleBlankLine_AfterHeader(t *testing.T) {
+	dir := t.TempDir()
+	tmpl := filepath.Join(dir, "tmpl.txt")
+	mustWrite(t, tmpl, []byte("// new\n"))
+	src := filepath.Join(dir, "hello.go")
+	mustWrite(t, src, []byte("// old\n\n//go:build go1.20\n\npackage x\n"))
+
+	rules := []TemplateRule{{TemplatePath: tmpl, Include: regexp.MustCompile(DefaultIncludeRegex)}}
+	e, _ := New(Options{Root: dir, Rules: rules, Git: &fakeGit{touched: true}, RespectGit: true})
+	_, err := e.Process(context.Background(), []string{src}, true)
+	if err != nil {
+		t.Fatalf("process error: %v", err)
+	}
+	got := string(mustRead(t, src))
+	// Expect exactly one blank line after header, then directives, then a blank line
+	if !strings.HasPrefix(got, "// new\n\n//go:build go1.20\n\n") {
+		t.Fatalf("unexpected spacing after replace:\n%s", got)
+	}
+}
+
+func TestLegacyPlusBuild_Tag_Reordered(t *testing.T) {
+	dir := t.TempDir()
+	tmpl := filepath.Join(dir, "tmpl.txt")
+	mustWrite(t, tmpl, []byte("// H\n"))
+	src := filepath.Join(dir, "hello.go")
+	mustWrite(t, src, []byte("// +build linux\n\npackage main\n"))
+
+	rules := []TemplateRule{{TemplatePath: tmpl, Include: regexp.MustCompile(DefaultIncludeRegex)}}
+	e, _ := New(Options{Root: dir, Rules: rules, Git: &fakeGit{touched: true}, RespectGit: true})
+	_, err := e.Process(context.Background(), []string{src}, true)
+	if err != nil {
+		t.Fatalf("process error: %v", err)
+	}
+	got := string(mustRead(t, src))
+	if !strings.HasPrefix(got, "// H\n\n// +build linux\n\n") {
+		t.Fatalf("legacy +build should be moved below header:\n%s", got)
+	}
+}
+
+func TestGoGenerate_Pragma_Reordered(t *testing.T) {
+	dir := t.TempDir()
+	tmpl := filepath.Join(dir, "tmpl.txt")
+	mustWrite(t, tmpl, []byte("// H\n"))
+	src := filepath.Join(dir, "hello.go")
+	mustWrite(t, src, []byte("//go:generate echo hi\n\npackage main\n"))
+
+	rules := []TemplateRule{{TemplatePath: tmpl, Include: regexp.MustCompile(DefaultIncludeRegex)}}
+	e, _ := New(Options{Root: dir, Rules: rules, Git: &fakeGit{touched: true}, RespectGit: true})
+	_, err := e.Process(context.Background(), []string{src}, true)
+	if err != nil {
+		t.Fatalf("process error: %v", err)
+	}
+	got := string(mustRead(t, src))
+	if !strings.HasPrefix(got, "// H\n\n//go:generate echo hi\n\n") {
+		t.Fatalf("go:generate should be moved below header:\n%s", got)
+	}
+}
+
+func TestNoop_WhenHeaderAlreadyCorrect(t *testing.T) {
+	dir := t.TempDir()
+	tmpl := filepath.Join(dir, "tmpl.txt")
+	mustWrite(t, tmpl, []byte("// H\n"))
+	src := filepath.Join(dir, "hello.go")
+	mustWrite(t, src, []byte("// H\n\npackage main\n"))
+
+	rules := []TemplateRule{{TemplatePath: tmpl, Include: regexp.MustCompile(DefaultIncludeRegex)}}
+	e, _ := New(Options{Root: dir, Rules: rules, Git: &fakeGit{touched: true}, RespectGit: true})
+	res, err := e.Process(context.Background(), []string{src}, true)
+	if err != nil {
+		t.Fatalf("process error: %v", err)
+	}
+	if res[0].Action != ActionNone {
+		t.Fatalf("expected no change, got: %+v", res[0])
 	}
 }
 
